@@ -6,9 +6,11 @@ import logging
 import matplotlib.pyplot as plt
 import scipy
 
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
+
 from sklearn.datasets import fetch_lfw_people
-from sklearn.grid_search import GridSearchCV
+from sklearn.model_selection import GridSearchCV
+
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import RandomizedPCA
@@ -76,13 +78,14 @@ print("done in %0.3fs" % (time() - t0))
 
 
 ###############################################################################
-# Train a SVM classification model
+# Train a MLP classification model
 
 print("Fitting the classifier to the training set")
 t0 = time()
 param_grid = {'learning_rate_init': [0.0001, 0.001, 0.1],
-              'alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1], }
-clf = GridSearchCV(MLPClassifier(activation='relu'), param_grid)
+              'alpha': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1],
+              'activation': ['identity', 'logistic', 'tanh', 'relu']}
+clf = GridSearchCV(MLPClassifier(max_iter=2000), param_grid)
 #clf = MLPClassifier(alpha = 0.1, activation='relu')
 clf = clf.fit(X_train_pca, y_train)
 print("done in %0.3fs" % (time() - t0))
