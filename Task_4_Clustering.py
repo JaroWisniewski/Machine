@@ -12,11 +12,13 @@ from sklearn.datasets import fetch_lfw_people
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
-from sklearn.decomposition import RandomizedPCA, PCA
-from sklearn.svm import SVC
+from sklearn.decomposition import RandomizedPCA
 from scipy.stats import sem
 from skimage.feature import peak_local_max, canny
 from skimage import exposure
+from skimage.util import img_as_int, img_as_ubyte, img_as_float
+from sklearn.metrics.cluster import homogeneity_score, v_measure_score
+
 
 print(__doc__)
 
@@ -47,9 +49,6 @@ print("Total dataset size:")
 print("n_samples: %d" % n_samples)
 print("n_features: %d" % n_features)
 print("n_classes: %d" % n_classes)
-print(h)
-print(w)
-
 
 ###############################################################################
 # Split into a training set and a test set using a stratified k fold
@@ -58,8 +57,8 @@ print(w)
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.25)
 
-"""
-###############################################################################
+
+"""###############################################################################
 # Compute a PCA (eigenfaces) on the face dataset (treated as unlabeled
 # dataset): unsupervised feature extraction / dimensionality reduction
 n_components = 100
@@ -67,7 +66,7 @@ n_components = 100
 print("Extracting the top %d eigenfaces from %d faces"
       % (n_components, X_train.shape[0]))
 t0 = time()
-pca = PCA(n_components=n_components, whiten=True, random_state=0).fit(X_train)
+pca = RandomizedPCA(n_components=n_components, whiten=True, random_state=0).fit(X_train)
 print("done in %0.3fs" % (time() - t0))
 
 eigenfaces = pca.components_.reshape((n_components, h, w))
@@ -76,16 +75,16 @@ print("Projecting the input data on the eigenfaces orthonormal basis")
 t0 = time()
 X_train_pca = pca.transform(X_train)
 X_test_pca = pca.transform(X_test)
-print("done in %0.3fs" % (time() - t0))
+print("done in %0.3fs" % (time() - t0))"""
 
 
 ###############################################################################
-# Train a SVM classification model
-"""
-print("Fitting the classifier to the training set")
+# Train a K- Means clustering model
 
-from sklearn.cluster import DBSCAN, KMeans
-kmeans = KMeans(n_clusters=n_classes, random_state=0, n_init=30).fit(X_train, y_train)
+print("Fitting the K Means clustering to the training set")
+
+from sklearn.cluster import KMeans
+kmeans = KMeans(init = 'k-means++', n_clusters=n_classes, n_init=30).fit(X_train, y_train)
 
 
 ###############################################################################
@@ -98,13 +97,12 @@ print("done in %0.3fs" % (time() - t0))
 print("Unique labels: {}".format(np.unique(y_pred)))
 
 print("Number of points per cluster = {}".format(np.bincount(y_pred+1)))
+print("Homogeneity score = {}".format(homogeneity_score(y_pred, y_test)))
+print("V-Measure score = {}".format(v_measure_score(y_pred, y_test)))
 print(classification_report(y_test, y_pred, target_names=target_names))
 print(confusion_matrix(y_test, y_pred, labels=range(n_classes)))
 
-
-###############################################################################
-# Qualitative evaluation of the predictions using matplotlib
-for cluster in range(max(y_pred) +1):
+"""for cluster in range(max(y_pred) +1):
      mask = y_pred == cluster
      n_images = np.sum(mask)
      fig, axes = plt.subplots(1, n_images, figsize=(n_images * 1.5, 4), subplot_kw={'xticks':(), 'yticks':()})
@@ -112,7 +110,28 @@ for cluster in range(max(y_pred) +1):
      figa.canvas.set_window_title("Clustering - {}".format(cluster))
      for images, label, ax in zip(X_test[mask], y_test[mask], axes):
          ax.imshow(images.reshape((h, w)), cmap=plt.cm.gray)
-         ax.set_title(lfw_people.target_names[label].split()[-1])
+         ax.set_title(lfw_people.target_names[label].split()[-1])"""
+
+###############################################################################
+# Train a Agglomerative Clustering clustering model
+
+from sklearn.cluster import AgglomerativeClustering
+
+print("Fitting the Agglomerative Clustering to the training set")
+
+for linkage in ('ward', 'average', 'complete'):
+    clustering = AgglomerativeClustering(linkage=linkage, n_clusters=n_classes)
+    t0 = time()
+    clustering.fit(X_train, y_train)
+    print("Linkage {}".format(linkage))
+    y_pred = clustering.fit_predict(X_test, y_test)
+    print(classification_report(y_test, y_pred, target_names=target_names))
+    print(confusion_matrix(y_test, y_pred, labels=range(n_classes))) 
+    print("Homogeneity score = {}".format(homogeneity_score(y_pred, y_test)))
+    print("V-Measure score = {}".format(v_measure_score(y_pred, y_test)))
+###############################################################################
+# Train a K- Means clustering model using preprocessed data
+print("Pre processing using edge detection....")
 
 Z = lfw_people.data
 
@@ -123,6 +142,50 @@ for i in range(n_samples):
 
 X_train, X_test, y_train, y_test = train_test_split(
     Z, y, test_size=0.25)
+    
+kmeans = KMeans(init = 'k-means++', n_clusters=n_classes, n_init=30).fit(X_train, y_train)
+
+
+###############################################################################
+# Quantitative evaluation of the model quality on the test set
+
+print("Predicting people's names on the test set")
+t0 = time()
+y_pred = kmeans.fit_predict(X_test, y_test)
+print("done in %0.3fs" % (time() - t0))
+print("Unique labels: {}".format(np.unique(y_pred)))
+
+print("Number of points per cluster using edge detection pre processing= {}".format(np.bincount(y_pred+1)))
+print(classification_report(y_test, y_pred, target_names=target_names))
+print(confusion_matrix(y_test, y_pred, labels=range(n_classes)))
+print("Homogeneity score = {}".format(homogeneity_score(y_pred, y_test)))
+print("V-Measure score = {}".format(v_measure_score(y_pred, y_test)))
+
+for cluster in range(max(y_pred) +1):
+    mask = y_pred == cluster
+    n_images = np.sum(mask)
+    fig, axes = plt.subplots(1, n_images, figsize=(n_images * 1.5, 4), subplot_kw={'xticks':(), 'yticks':()})
+    figa = plt.gcf()
+    figa.canvas.set_window_title("Clustering with edge detection - {}".format(cluster))
+    for images, label, ax in zip(X_test[mask], y_test[mask], axes):
+         ax.imshow(images.reshape((h, w)), cmap=plt.cm.gray)
+         ax.set_title(lfw_people.target_names[label].split()[-1])
+
+"""print("Pre processing using histogram equlalization....")
+
+Q = lfw_people.data
+N = Q[0].reshape(h, w).astype(np.float32)
+N = exposure.equalize_adapthist(N)
+plt.imshow(N)
+for i in range(n_samples):
+    image = Q[i].reshape(h, w)
+    image = Image.fromarray(image, 'L')
+    image = img_as_ubyte(image)
+    img = exposure.equalize_adapthist(image)
+    Q[i] = img.reshape(h*w)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    Q, y, test_size=0.25)
     
 kmeans = KMeans(n_clusters=n_classes, random_state=0, n_init=30).fit(X_train, y_train)
 
@@ -136,7 +199,7 @@ y_pred = kmeans.fit_predict(X_test, y_test)
 print("done in %0.3fs" % (time() - t0))
 print("Unique labels: {}".format(np.unique(y_pred)))
 
-print("Number of points per cluster = {}".format(np.bincount(y_pred+1)))
+print("Number of points per cluster using histogram equalization pre processing= {}".format(np.bincount(y_pred+1)))
 print(classification_report(y_test, y_pred, target_names=target_names))
 print(confusion_matrix(y_test, y_pred, labels=range(n_classes)))
         
@@ -145,10 +208,9 @@ for cluster in range(max(y_pred) +1):
     n_images = np.sum(mask)
     fig, axes = plt.subplots(1, n_images, figsize=(n_images * 1.5, 4), subplot_kw={'xticks':(), 'yticks':()})
     figa = plt.gcf()
-    figa.canvas.set_window_title("Clustering with edge detection - {}".format(cluster))
+    figa.canvas.set_window_title("Clustering with histogram equalization - {}".format(cluster))
     for images, label, ax in zip(X_test[mask], y_test[mask], axes):
          ax.imshow(images.reshape((h, w)), cmap=plt.cm.gray)
-         ax.set_title(lfw_people.target_names[label].split()[-1])
-
+         ax.set_title(lfw_people.target_names[label].split()[-1])"""
          
 plt.show()
