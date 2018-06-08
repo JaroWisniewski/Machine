@@ -7,35 +7,32 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.datasets import fetch_lfw_people
+import matplotlib.pyplot as plt
 
 tf.logging.set_verbosity(tf.logging.INFO)
 #############################################
 # LOAD DATA AND SPLIT FOR TRAINING AND EVALUATING
-  # this produces centered 64x64 image from orig. 250x250
+  # this produces cropped centered 64x64 image
 lfw_people = fetch_lfw_people(min_faces_per_person=70, 
                                 slice_ = (slice(61,189),slice(61,189)),
                                 resize=0.5, color = False)
 X = lfw_people.images
 y = lfw_people.target
 
- # get count of number of possible labels - need to use this as
-  # number of units for dense layer in call to tf.layers.dense and
-  # for defining the one-hot matrix. Here the number of possible
-  # labels is 34. It will be differnet if you use a different subset
-  # of LFW.
 target_names = lfw_people.target_names
 n_classes = target_names.shape[0]
-  
+
 y = np.asarray(y, dtype=np.int32)
-  
+
+
   # split into a training and testing set
   # X_train, X_test, y_train, y_test = train_test_split(
-train_data, eval_data, train_labels, eval_labels = train_test_split(
-X, y, test_size=0.25, random_state=42)
+train_set, eval_set, train_lbl, eval_lbl = train_test_split(
+X, y, test_size=0.25, random_state=10)
 ############################################
 
 def cnn_model_fn(features, labels, mode):
-  """Model function for CNN."""
+ # Model function for CNN.
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
   # Images are 64x64 pixels, and have one color channel
@@ -88,9 +85,9 @@ def cnn_model_fn(features, labels, mode):
   # Output Tensor Shape: [batch_size, 1024]
   dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
 
-  # Add dropout operation; 0.6 probability that element will be kept
+  # Add dropout operation; 0.3 probability that element will be kept
   dropout = tf.layers.dropout(
-      inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+      inputs=dense, rate=0.3, training=mode == tf.estimator.ModeKeys.TRAIN)
 
   # Logits layer
   # Input Tensor Shape: [batch_size, 1024]
@@ -139,20 +136,20 @@ def main(unused_argv):
 
   # Train the model
   train_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": train_data},
-      y=train_labels,
+      x={"x": train_set},
+      y=train_lbl,
       batch_size=1000,
       num_epochs=None,
       shuffle=True)
   lfw_clf.train(
       input_fn=train_input_fn,
-      steps=20000,
+      steps=1000,
       hooks=[logging_hook])
 
   # Evaluate the model and print results
   eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": eval_data},
-      y=eval_labels,
+      x={"x": eval_set},
+      y=eval_lbl,
       num_epochs=1,
       shuffle=False)
   eval_results = lfw_clf.evaluate(input_fn=eval_input_fn)
@@ -161,3 +158,4 @@ def main(unused_argv):
 
 if __name__ == "__main__":
   tf.app.run()
+
