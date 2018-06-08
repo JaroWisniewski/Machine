@@ -49,22 +49,25 @@ X = lfw_people.data
 
 n_features = X.shape[1]
 
-
 # the label to predict is the id of the person
 y = lfw_people.target
 target_names = lfw_people.target_names
 n_classes = target_names.shape[0]
-
 print("Total dataset size:")
 print("n_samples: %d" % n_samples)
 print("n_features: %d" % n_features)
 print("n_classes: %d" % n_classes)
 
+position = 0
+N = [0]
+for i in range(len(X)):
+    if y[i]==0:
+        N.insert(0, X[i])
+
 ###############################################################################
 # split into a training and testing set
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.25)
-
 
 ###############################################################################
 # Compute a PCA (eigenfaces) on the face dataset (treated as unlabeled
@@ -86,7 +89,9 @@ X_train_pca = pca.transform(X_train)
 X_test_pca = pca.transform(X_test)
 print("done in %0.3fs" % (time() - t0))
 
-print(len(X_train_pca))
+print("Number of pictures : {}".format(len(X_train_pca)))
+print("Bush pictures = {}".format(sum(y_train == 1)))
+
 
 ###############################################################################
 #GP
@@ -97,19 +102,19 @@ def protectedDiv(left, right):
     except ZeroDivisionError:
         return 1
 
-pset = gp.PrimitiveSet("MAIN", 1)
+pset = gp.PrimitiveSet("MAIN", 10)
 pset.addPrimitive(operator.add, 2)
 pset.addPrimitive(operator.sub, 2)
 pset.addPrimitive(operator.mul, 2)
-pset.addPrimitive(protectedDiv, 2)
+#pset.addPrimitive(protectedDiv, 2)
 pset.addPrimitive(operator.neg, 1)
 pset.addPrimitive(math.cos, 1)
 pset.addPrimitive(math.sin, 1)
-pset.addEphemeralConstant("rand1110111113", lambda: random.randint(-1,1))
-pset.renameArguments(ARG0='x')
+pset.addEphemeralConstant("rand101", lambda: random.randint(-1,1))
+pset.renameArguments(ARG0='a')
 
-creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMin)
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
 toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
@@ -118,19 +123,26 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 
 # 0 is powell, 1 is bush
-def evalSymbReg(individual):
-    fitness = 0
+def evalSymbReg(individual, ):
     
     # Transform the tree expression in a callable function
     func = toolbox.compile(expr=individual)
+    fitness = 0
+    total = len(X_train_pca)
+    bush = sum(y_train == 1)
+    colin = total - bush
+    bush_co = bush/total
+    colin_co = colin/total
+    weight_bush = 0.5/bush_co
+    weight_colin = 0.5/colin_co
     for i in range(len(X_train_pca)):
         x = X_train_pca[i]
-        value = func(x)
-        value2 = y_train[i]
-        if (value2 == 0  and value[i] > 0) or (value2 ==1 and value[i] < 0):
-            fitness += 1
-        else:
-            fitness -= 1
+        value = func(*x)
+        y = y_train[i]
+        if value < 0 and y == 0:
+            fitness += 1 * weight_colin
+        elif value > 0 and y == 1:
+            fitness += 1 * weight_bush
     return fitness,
 
 toolbox.register("evaluate", evalSymbReg)
@@ -156,9 +168,9 @@ def main():
     mstats.register("min", numpy.min)
     mstats.register("max", numpy.max)
 
-    pop, log = algorithms.eaSimple(pop, toolbox, 0.5, 0.1, 40, stats=mstats,
+    pop, log = algorithms.eaSimple(pop, toolbox, 0.5, 0.3, 60, stats=mstats,
                                    halloffame=hof, verbose=True)
-    # print log
+    print(hof[0])    
     return pop, log, hof
 #first individual hof[0] is the best individual
     # graphics - print the tree
@@ -214,4 +226,5 @@ if __name__ == "__main__":
 #print(complete)
 #plt.imshow(X_test[0].reshape(h,w))
 #plt.show()
+
 
