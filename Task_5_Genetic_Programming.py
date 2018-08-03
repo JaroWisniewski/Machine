@@ -42,9 +42,6 @@ X = lfw_people.data[mask]
 # introspect the images arrays to find the shapes (for plotting)
 n_samples, h, w = lfw_people.images.shape
 
-# for machine learning we use the 2 data directly (as relative pixel
-# positions info is ignored by this model)
-
 n_features = X.shape[1]
 
 # the label to predict is the id of the person
@@ -132,7 +129,7 @@ for i in nodes:
 g.draw("tree.pdf")
 """
 
-# 0 is powell, 1 is bush
+# 0 = powell, 1 = bush
 def evalSymbReg(individual, ):
     
     # Transform the tree expression in a callable function
@@ -171,7 +168,7 @@ def main():
     mstats.register("min", numpy.min)
     mstats.register("max", numpy.max)
 
-    pop, log = algorithms.eaSimple(pop, toolbox, 0.1, 0.8, 60, stats=mstats,
+    pop, log = algorithms.eaSimple(pop, toolbox, 0.5, 0.3, 1000, stats=mstats,
                                    halloffame=hof, verbose=True)
     print(hof[0])    
     return pop, log, hof
